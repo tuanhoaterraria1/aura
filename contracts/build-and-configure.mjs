@@ -326,8 +326,9 @@ const target = (targetId, extra) => ({
 
 const config = {
   schemaVersion: "programmable.launch-pack-config.v3",
-  // Live Ethereum capabilities admit only 3.6.0 for fresh submissions (CLI 4.1.6).
-  profileVersion: "3.6.0",
+  // profileVersion is deliberately omitted: CLI 4.1.6 then reads live capabilities at pack time and binds the
+  // current profile (3.6.0) and its current Programmable trade-fee policy. An explicit version would bind the
+  // CLI's offline default policy, which the server rejects.
   launchWallet,
   chainId: "1",
   nonce,
