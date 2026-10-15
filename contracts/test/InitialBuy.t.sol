@@ -17,7 +17,7 @@ contract InitialBuyQuote is Test {
         uint256 buyWei = vm.envOr("CORTEX_INITIAL_BUY_WEI", uint256(0.05 ether));
         address launchWallet = makeAddr("launchWallet");
         PoolManager manager = new PoolManager(address(this));
-        CortexLauncher launcher = new CortexLauncher(manager, launchWallet, makeAddr("vault"));
+        CortexLauncher launcher = new CortexLauncher(manager, launchWallet);
         CortexToken token = new CortexToken("Aura coin 404", "AURA", 1_000_000_000 ether, address(launcher));
         address hookAddress = address(
             uint160(

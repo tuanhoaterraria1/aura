@@ -13,23 +13,7 @@ import { mkdir, open, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const EXPECTED_SOLC = "0.8.26+commit.8a97fa7a.Emscripten.clang";
-// Frozen `programmable:settlement-fee-vault:v1` release module, copied from the verified @programmable/launch 3.3.9
-// package (test/fixtures). Values are the ones Programmable's own example pins.
-const EXPECTED_VAULT_DESCRIPTOR_SHA256 =
-  "sha256:b3bc25d1471953ab2afd5eb5bb2261bfe39d194e4e597eeabd6bea8d445ae56a";
-const EXPECTED_VAULT_STANDARD_JSON_SHA256 =
-  "sha256:840f0827714818dd9cf28ce15b684eb907d58b3701d3b3a9f28d0f3be137c7d9";
-const EXPECTED_VAULT_CREATION_SHA256 =
-  "sha256:7b0d51612be90023839f36cf28ae56963d8146d28ff441dd2a20195d56238b81";
-const EXPECTED_VAULT_RUNTIME_SHA256 =
-  "sha256:980c0eec1017a7dbbd9010935107440125070a0b1fa4688bca92754e2bf1e649";
-const VAULT_SOURCE = "src/ProgrammableSettlementFeeVaultV1.sol";
-const VAULT_CONTRACT = "ProgrammableSettlementFeeVaultV1";
-const VAULT_DESCRIPTOR_PATH = "release-modules/programmable-settlement-fee-vault-v1.json";
-const VAULT_STANDARD_JSON_PATH = "release-modules/programmable-settlement-fee-vault-v1.standard-json.json";
-
 // Ethereum Mainnet bindings used by Programmable's V3 profile.
-const GRAPH_FACTORY = "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887";
 const POOL_MANAGER = "0x000000000004444c5dc75cB358380D2e3dE08A90";
 const NATIVE_CURRENCY = "0x0000000000000000000000000000000000000000";
 
@@ -235,51 +219,12 @@ if (permitSeconds < 60 || permitSeconds > 3540) {
   throw new TypeError("PROGRAMMABLE_PERMIT_DEADLINE_SECONDS must be 60..3540 (CLI limit: 3600s window incl. 60s back-dating)");
 }
 
-// ------------------------------------------------------------------ frozen settlement-fee-vault module
-
-for (const required of [VAULT_DESCRIPTOR_PATH, VAULT_STANDARD_JSON_PATH]) {
-  if (!existsSync(path.join(root, required))) {
-    throw new TypeError(`${required} is missing; copy it from the verified @programmable/launch 3.3.9 package (see README)`);
-  }
-}
-const vaultDescriptorBytes = await readFile(path.join(root, VAULT_DESCRIPTOR_PATH));
-assertDigest(vaultDescriptorBytes, EXPECTED_VAULT_DESCRIPTOR_SHA256, "settlement fee vault descriptor");
-const vaultStandardJson = JSON.parse(await readFile(path.join(root, VAULT_STANDARD_JSON_PATH), "utf8"));
-const vaultStandardJsonBytes = Buffer.from(JSON.stringify(vaultStandardJson), "utf8");
-assertDigest(vaultStandardJsonBytes, EXPECTED_VAULT_STANDARD_JSON_SHA256, "settlement fee vault Standard JSON");
-const vaultStandardJsonPath = path.join(root, "standard-json/programmable-settlement-fee-vault-v1.json");
-await writeFile(vaultStandardJsonPath, vaultStandardJsonBytes);
-const vaultOutput = await compileStandardJson(
-  vaultStandardJsonPath,
-  path.join(root, "standard-json/.programmable-settlement-fee-vault-v1-output.json"),
-);
-const vault = vaultOutput.contracts?.[VAULT_SOURCE]?.[VAULT_CONTRACT];
-if (!vault?.abi || !vault?.evm?.bytecode?.object || !vault?.evm?.deployedBytecode?.object) {
-  throw new TypeError("settlement fee vault compiler output is incomplete");
-}
-assertDigest(Buffer.from(vault.evm.bytecode.object, "hex"), EXPECTED_VAULT_CREATION_SHA256, "vault creation bytecode");
-assertDigest(Buffer.from(vault.evm.deployedBytecode.object, "hex"), EXPECTED_VAULT_RUNTIME_SHA256, "vault runtime bytecode");
-await writeFile(
-  path.join(root, "artifacts/settlement-fee-vault.json"),
-  `${JSON.stringify({
-    abi: vault.abi,
-    bytecode: { object: vault.evm.bytecode.object, linkReferences: {} },
-    deployedBytecode: { object: vault.evm.deployedBytecode.object, linkReferences: {}, immutableReferences: {} },
-    metadata: {
-      compiler: { version: "0.8.26+commit.8a97fa7a" },
-      language: "Solidity",
-      settings: { ...vaultStandardJson.settings, compilationTarget: { [VAULT_SOURCE]: VAULT_CONTRACT } },
-    },
-  })}\n`,
-);
-
 // ------------------------------------------------------------------ evidence + config
 
 const immutableBindings = {
   poolManager: { literal: POOL_MANAGER },
   registrar: { target: "launcher" },
   launchWallet: { literal: launchWallet },
-  settlementFeeVault: { target: "settlement-fee-vault" },
   hook: { target: "hook" },
   token: { target: "token" },
 };
@@ -334,18 +279,17 @@ const config = {
   nonce,
   source: {
     root: ".",
-    paths: ["package-lock.json", "release-modules", "src"],
+    paths: ["package-lock.json", "src"],
     sourceLineageNonce,
     publicOrigin: { url: publicOriginUrl.toString(), revision },
   },
   compilationUnits: [
-    { compilationUnitId: "canonical-settlement-fee-vault-v1", standardJson: "standard-json/programmable-settlement-fee-vault-v1.json" },
     { compilationUnitId: "cortex-solc", standardJson: "standard-json/cortex.json" },
   ],
   targets: [
     target("launcher", {
       applicantSalt: `0x${"01".repeat(32)}`,
-      constructorArguments: [POOL_MANAGER, launchWallet, { target: "settlement-fee-vault" }],
+      constructorArguments: [POOL_MANAGER, launchWallet],
       initializer: {
         function: "initialize",
         arguments: [
@@ -374,19 +318,6 @@ const config = {
       applicantSalt: `0x${"03".repeat(32)}`,
       constructorArguments: [POOL_MANAGER, { target: "hook" }, { target: "token" }],
     }),
-    {
-      targetId: "settlement-fee-vault",
-      compilationUnitId: "canonical-settlement-fee-vault-v1",
-      artifact: "artifacts/settlement-fee-vault.json",
-      applicantSalt: `0x${"04".repeat(32)}`,
-      constructorArguments: [GRAPH_FACTORY],
-      initializer: { function: "bindRoute", arguments: [{ target: "launcher" }] },
-      deploymentValueWei: "0",
-      initializerValueWei: "0",
-      componentKind: "other",
-      declaredHookPermissions: null,
-      runtimeImmutables: [],
-    },
   ],
   pool: { tokenTargetId: "token", hookTargetId: "hook", fee: LP_FEE, tickSpacing: TICK_SPACING, quoteCurrency: NATIVE_CURRENCY },
   projectMetadata: {

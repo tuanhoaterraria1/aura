@@ -28,7 +28,6 @@ Thêm vào đó là fair launch: 100% supply nằm trong LP single-sided bị kh
    ├─ anti-sniper 30 block đầu: 10% giảm tuyến tính về 0 (launcher được miễn)
    └─ distribute(): ai cũng gọi được, người nhận cố định
  CortexTreasury: chỉ buyback-and-burn, tối đa 20% số dư/lần, cooldown 1h, không owner, không withdraw
- settlement-fee-vault: module chuẩn của Programmable, bind với launcher (bắt buộc theo graph V3)
 
  agent/ (Node 24 + Claude Opus 5.5 + viem)
    snapshot onchain → Claude (structured output) → guardrails mirror → publish reasoning (hash) → tx
@@ -136,7 +135,7 @@ cp .env.example .env
 npm run build
 ```
 
-Script compile bằng `solc 0.8.26+commit.8a97fa7a` (cancun, viaIR, optimizer 200, không CBOR, đúng cấu hình của ví dụ chính thức), map immutables, rồi ghi `programmable-launch.config.json` với 5 target: `launcher` (initializer), `token`, `hook` (salt do CLI grind để khớp mask `0x20cc`), `treasury`, `settlement-fee-vault`. Liquidity model: `launch-seeded-concentrated-liquidity`.
+Script compile bằng `solc 0.8.26+commit.8a97fa7a` (cancun, viaIR, optimizer 200, không CBOR, đúng cấu hình của ví dụ chính thức), map immutables, rồi ghi `programmable-launch.config.json` với 4 target: `launcher` (initializer), `token`, `hook` (salt do CLI grind để khớp mask `0x20cc`, đồng thời là target ràng buộc phí platform), `treasury`. Profile 3.6.0 không còn bắt buộc vault phí của Programmable. Liquidity model: `launch-seeded-concentrated-liquidity`.
 
 ### 6. Pack, validate, submit
 

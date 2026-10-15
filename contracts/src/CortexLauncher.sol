@@ -34,12 +34,9 @@ contract CortexLauncher is IUnlockCallback, ReentrancyGuardTransient {
     uint24 public constant LP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
     bytes32 public constant POSITION_SALT = bytes32(0);
-    address private constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     IPoolManager public immutable poolManager;
     address public immutable launchWallet;
-    /// @notice Canonical Programmable settlement-fee-vault target bound to this route in the launch graph.
-    address public immutable settlementFeeVault;
 
     bool public launched;
     address public hook;
@@ -59,6 +56,7 @@ contract CortexLauncher is IUnlockCallback, ReentrancyGuardTransient {
     error InsufficientInitialBuy(uint256 received, uint256 minimum);
     error InvalidStartTick(int24 startTick);
     error NotLaunched();
+    error NotPoolManager();
     error UnauthorizedLaunch();
     error UnexpectedUnlock();
     error ZeroAddress();
@@ -75,13 +73,15 @@ contract CortexLauncher is IUnlockCallback, ReentrancyGuardTransient {
     );
     event LpFeesCollected(uint256 ethAmount, uint256 tokenAmount);
 
-    constructor(IPoolManager poolManager_, address launchWallet_, address settlementFeeVault_) {
-        if (address(poolManager_) == address(0) || launchWallet_ == address(0) || settlementFeeVault_ == address(0)) {
-            revert ZeroAddress();
-        }
+    modifier onlyPoolManager() {
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
+        _;
+    }
+
+    constructor(IPoolManager poolManager_, address launchWallet_) {
+        if (address(poolManager_) == address(0) || launchWallet_ == address(0)) revert ZeroAddress();
         poolManager = poolManager_;
         launchWallet = launchWallet_;
-        settlementFeeVault = settlementFeeVault_;
     }
 
     /// @notice One-shot launch, executed by the Programmable launch transaction signed by `launchWallet`.
@@ -144,8 +144,8 @@ contract CortexLauncher is IUnlockCallback, ReentrancyGuardTransient {
         return _key;
     }
 
-    function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(poolManager) || !_reentrancyGuardEntered()) revert UnexpectedUnlock();
+    function unlockCallback(bytes calldata data) external onlyPoolManager returns (bytes memory) {
+        if (!_reentrancyGuardEntered()) revert UnexpectedUnlock();
         (Action action, uint256 supply, uint256 buyEth) = abi.decode(data, (Action, uint256, uint256));
         PoolKey memory key = _key;
         if (action == Action.Seed) return _seed(key, supply, buyEth);

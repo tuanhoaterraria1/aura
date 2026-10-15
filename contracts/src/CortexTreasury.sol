@@ -43,6 +43,7 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
     error BuybackTooLarge(uint256 ethIn, uint256 maxEthIn);
     error BuybackTooSoon(uint64 nextAllowedAt);
     error InsufficientOutput(uint256 received, uint256 minimum);
+    error NotPoolManager();
     error Unauthorized();
     error UnexpectedUnlock();
     error ZeroAddress();
@@ -50,6 +51,11 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
 
     event Buyback(address indexed caller, uint256 ethIn, uint256 tokensBurned, bytes32 indexed reasoningHash);
     event TokensBurned(uint256 amount);
+
+    modifier onlyPoolManager() {
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
+        _;
+    }
 
     constructor(IPoolManager poolManager_, address hook_, address token_) {
         if (address(poolManager_) == address(0) || hook_ == address(0) || token_ == address(0)) revert ZeroAddress();
@@ -97,8 +103,8 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
         emit TokensBurned(amount);
     }
 
-    function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(poolManager) || !_reentrancyGuardEntered()) revert UnexpectedUnlock();
+    function unlockCallback(bytes calldata data) external onlyPoolManager returns (bytes memory) {
+        if (!_reentrancyGuardEntered()) revert UnexpectedUnlock();
         uint256 ethIn = abi.decode(data, (uint256));
         PoolKey memory key = ICortexHookView(hook).poolKey();
         BalanceDelta delta = poolManager.swap(

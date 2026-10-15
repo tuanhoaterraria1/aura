@@ -1,21 +1,32 @@
 No files changed, compilation skipped
 
+Ran 1 test for test/InitialBuy.t.sol:InitialBuyQuote
+[PASS] test_QuoteInitialBuy() (gas: 6753420)
+Logs:
+  initial buy wei      50000000000000000
+  tokens received      14556863985580800540627155
+  share of supply bps  145
+  platform fee wei     150000000000000
+  treasury fee wei     350000000000000
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.00ms (672.50µs CPU time)
+
 Ran 15 tests for test/Cortex.t.sol:CortexTest
-[PASS] testFuzz_FeesForNetCoverGross(uint96,uint24) (runs: 512, μ: 15112, ~: 15062)
+[PASS] testFuzz_FeesForNetCoverGross(uint96,uint24) (runs: 512, μ: 15120, ~: 15062)
 [PASS] test_AgentCannotExceedCapOrTtl() (gas: 86175)
 [PASS] test_AgentUpdatesWithinGuardrails() (gas: 57408)
-[PASS] test_BuybackBurnsAndIsBounded() (gas: 502065)
+[PASS] test_BuybackBurnsAndIsBounded() (gas: 502005)
 [PASS] test_DistributePaysFixedRecipients() (gas: 87822)
 [PASS] test_ExactInputBuyChargesGrossEthInput() (gas: 177372)
 [PASS] test_ExactInputSellChargesGrossEthOutput() (gas: 251122)
 [PASS] test_ExactOutputBuyCoversRateOnGrossInput() (gas: 183376)
 [PASS] test_ExactOutputSellCoversRateOnGrossOutput() (gas: 267831)
-[PASS] test_LaunchIsOneShotAndWalletBound() (gas: 22810)
-[PASS] test_LaunchLocksSupplyAndChargesInitialBuy() (gas: 41199)
-[PASS] test_LpFeesFlowToTreasuryAndBurn() (gas: 407752)
+[PASS] test_LaunchIsOneShotAndWalletBound() (gas: 22788)
+[PASS] test_LaunchLocksSupplyAndChargesInitialBuy() (gas: 41177)
+[PASS] test_LpFeesFlowToTreasuryAndBurn() (gas: 407674)
 [PASS] test_OnlyAgentAndAdminControls() (gas: 65649)
 [PASS] test_OnlyLauncherRegistersAndNoForeignPools() (gas: 506970)
 [PASS] test_SnipeFeeDecays() (gas: 28282)
-Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 10.76ms (13.95ms CPU time)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 10.85ms (15.43ms CPU time)
 
-Ran 1 test suite in 11.48ms (10.76ms CPU time): 15 tests passed, 0 failed, 0 skipped (15 total tests)
+Ran 2 test suites in 11.78ms (11.85ms CPU time): 16 tests passed, 0 failed, 0 skipped (16 total tests)

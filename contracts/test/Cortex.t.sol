@@ -72,13 +72,12 @@ contract CortexTest is Test {
 
     address launchWallet = makeAddr("launchWallet");
     address agent = makeAddr("agent");
-    address vault = makeAddr("settlementFeeVault");
     address trader = makeAddr("trader");
     address stranger = makeAddr("stranger");
 
     function setUp() public {
         manager = new PoolManager(address(this));
-        launcher = new CortexLauncher(manager, launchWallet, vault);
+        launcher = new CortexLauncher(manager, launchWallet);
         token = new CortexToken("Cortex", "CTX", SUPPLY, address(launcher));
 
         address hookAddress = address(
