@@ -10,3 +10,5 @@ launch.json
 *.receipt.json
 .programmable-launch/
 .env
+preflight-result.json
+submit-result.json

@@ -326,6 +326,8 @@ const target = (targetId, extra) => ({
 
 const config = {
   schemaVersion: "programmable.launch-pack-config.v3",
+  // Live Ethereum capabilities admit only 3.6.0 for fresh submissions (CLI 4.1.6).
+  profileVersion: "3.6.0",
   launchWallet,
   chainId: "1",
   nonce,
@@ -399,7 +401,8 @@ const config = {
       tokenTargetId: "token",
       hookTargetId: "hook",
       initializerTargetId: "launcher",
-      platformFeeBindingTargetId: "settlement-fee-vault",
+      // 3.6: the target that declares the platform fee binding; CortexHook hard-codes the 0.3% recipient.
+      platformFeeBindingTargetId: "hook",
     },
     liquidityModel: {
       schemaVersion: "programmable.direct-native-liquidity-model-intent.v1",
