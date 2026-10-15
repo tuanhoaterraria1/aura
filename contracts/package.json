@@ -1,0 +1,23 @@
+{
+  "name": "cortex-hook-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cortex: AI-agent-steered Uniswap v4 hook launched through Programmable Custom Launch V3 on Ethereum Mainnet.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24.14.0 <25"
+  },
+  "scripts": {
+    "compile": "node build-and-configure.mjs --compile-only",
+    "build": "node --env-file-if-exists=.env build-and-configure.mjs",
+    "test": "forge test -vv"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.6.1",
+    "@openzeppelin/uniswap-hooks": "1.1.1",
+    "@uniswap/v4-core": "1.0.2",
+    "@uniswap/v4-periphery": "1.0.3",
+    "solc": "0.8.26"
+  }
+}

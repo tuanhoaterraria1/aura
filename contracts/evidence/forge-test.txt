@@ -1,0 +1,21 @@
+No files changed, compilation skipped
+
+Ran 15 tests for test/Cortex.t.sol:CortexTest
+[PASS] testFuzz_FeesForNetCoverGross(uint96,uint24) (runs: 512, μ: 15112, ~: 15062)
+[PASS] test_AgentCannotExceedCapOrTtl() (gas: 86175)
+[PASS] test_AgentUpdatesWithinGuardrails() (gas: 57408)
+[PASS] test_BuybackBurnsAndIsBounded() (gas: 502065)
+[PASS] test_DistributePaysFixedRecipients() (gas: 87822)
+[PASS] test_ExactInputBuyChargesGrossEthInput() (gas: 177372)
+[PASS] test_ExactInputSellChargesGrossEthOutput() (gas: 251122)
+[PASS] test_ExactOutputBuyCoversRateOnGrossInput() (gas: 183376)
+[PASS] test_ExactOutputSellCoversRateOnGrossOutput() (gas: 267831)
+[PASS] test_LaunchIsOneShotAndWalletBound() (gas: 22810)
+[PASS] test_LaunchLocksSupplyAndChargesInitialBuy() (gas: 41199)
+[PASS] test_LpFeesFlowToTreasuryAndBurn() (gas: 407752)
+[PASS] test_OnlyAgentAndAdminControls() (gas: 65649)
+[PASS] test_OnlyLauncherRegistersAndNoForeignPools() (gas: 506970)
+[PASS] test_SnipeFeeDecays() (gas: 28282)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 10.76ms (13.95ms CPU time)
+
+Ran 1 test suite in 11.48ms (10.76ms CPU time): 15 tests passed, 0 failed, 0 skipped (15 total tests)

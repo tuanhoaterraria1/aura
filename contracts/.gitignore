@@ -1,0 +1,12 @@
+node_modules/
+lib/
+out/
+cache/
+artifacts/
+standard-json/
+evidence/build.json
+programmable-launch.config.json
+launch.json
+*.receipt.json
+.programmable-launch/
+.env
