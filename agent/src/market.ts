@@ -53,7 +53,6 @@ export interface MarketSnapshot {
     regimeExpiresInMinutes: number;
     minutesSinceLastUpdate: number | null;
     nextUpdateAllowedInMinutes: number;
-    snipeFeePpm: number;
     blocksSinceLaunch: number;
     regimeNonce: string;
     platformFeesAccruedEth: number;
@@ -112,7 +111,6 @@ export async function takeSnapshot(
     expiresAt,
     lastUpdate,
     regimeNonce,
-    snipe,
     platformAccrued,
     treasuryAccrued,
     totalPlatform,
@@ -131,7 +129,6 @@ export async function takeSnapshot(
     client.readContract({ ...hook, functionName: "agentFeeExpiresAt" }),
     client.readContract({ ...hook, functionName: "lastAgentUpdate" }),
     client.readContract({ ...hook, functionName: "regimeNonce" }),
-    client.readContract({ ...hook, functionName: "snipeFeePpm" }),
     client.readContract({ ...hook, functionName: "platformFeesAccrued" }),
     client.readContract({ ...hook, functionName: "treasuryFeesAccrued" }),
     client.readContract({ ...hook, functionName: "totalPlatformFees" }),
@@ -230,7 +227,6 @@ export async function takeSnapshot(
       regimeExpiresInMinutes: minutesUntil(expiresAt),
       minutesSinceLastUpdate: lastUpdate === 0n ? null : Number(now - lastUpdate) / 60,
       nextUpdateAllowedInMinutes: lastUpdate === 0n ? 0 : minutesUntil(lastUpdate + 900n),
-      snipeFeePpm: snipe,
       blocksSinceLaunch: Number(block.number - launchBlock),
       regimeNonce: regimeNonce.toString(),
       platformFeesAccruedEth: Number(formatEther(platformAccrued)),

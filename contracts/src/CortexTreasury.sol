@@ -7,7 +7,7 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { CurrencySettler } from "@openzeppelin/uniswap-hooks/src/utils/CurrencySettler.sol";
 import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import { IUnlockCallback } from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
-import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import { StateLibrary } from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import { BalanceDelta } from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
 import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -15,6 +15,7 @@ import { SwapParams } from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 interface ICortexHookView {
     function agent() external view returns (address);
+    function admin() external view returns (address);
     function poolKey() external view returns (PoolKey memory);
     function treasuryFeesAccrued() external view returns (uint256);
     function platformFeesAccrued() external view returns (uint256);
@@ -23,14 +24,19 @@ interface ICortexHookView {
 
 /// @title CortexTreasury
 /// @notice Receives the AI-steered treasury fee and the locked LP's fees. Its only spending path is
-///         buyback-and-burn: the agent (or anyone, once the agent key is revoked) buys the token from the pool
-///         and burns it. Each buyback is capped at 20% of the ETH balance and spaced at least 1 hour apart.
-///         There is no owner and no withdraw function.
+///         buyback-and-burn, and only an authorized executor can trigger it: the hook's agent, or the hook's
+///         admin while no agent is set. Nobody else can call it; if both roles are renounced, buybacks stop.
+///         Each buyback: at most 20% of the ETH balance, at least 1 hour apart, a mandatory nonzero
+///         minTokensOut, and a hard price-impact bound (the swap reverts if it would move the price more than
+///         ~2% from the pre-trade pool price). There is no owner and no withdraw function.
 contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
     using CurrencySettler for Currency;
+    using StateLibrary for IPoolManager;
 
     uint256 public constant MAX_BUYBACK_BPS = 2_000;
     uint32 public constant BUYBACK_COOLDOWN = 1 hours;
+    /// @dev sqrt(0.98) in parts per million: the buyback may move the price by at most ~2%.
+    uint256 public constant MAX_IMPACT_SQRT_PRICE_PPM = 989_949;
 
     IPoolManager public immutable poolManager;
     address public immutable hook;
@@ -48,6 +54,7 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
     error UnexpectedUnlock();
     error ZeroAddress();
     error ZeroAmount();
+    error ZeroMinimumOutput();
 
     event Buyback(address indexed caller, uint256 ethIn, uint256 tokensBurned, bytes32 indexed reasoningHash);
     event TokensBurned(uint256 amount);
@@ -77,9 +84,9 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
         nonReentrant
         returns (uint256 tokensBurned)
     {
-        address agent = ICortexHookView(hook).agent();
-        if (agent != address(0) && msg.sender != agent) revert Unauthorized();
+        if (msg.sender != authorizedExecutor() || msg.sender == address(0)) revert Unauthorized();
         if (ethIn == 0) revert ZeroAmount();
+        if (minTokensOut == 0) revert ZeroMinimumOutput();
         uint64 nextAllowedAt = lastBuybackAt + BUYBACK_COOLDOWN;
         if (lastBuybackAt != 0 && block.timestamp < nextAllowedAt) revert BuybackTooSoon(nextAllowedAt);
         uint256 maxEthIn = maxBuybackEth();
@@ -92,6 +99,12 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
 
         tokensBurned = burnHeldTokens();
         emit Buyback(msg.sender, ethIn, tokensBurned, reasoningHash);
+    }
+
+    /// @notice The only address allowed to trigger buybacks: the hook's agent, or its admin while no agent is set.
+    function authorizedExecutor() public view returns (address) {
+        address agent = ICortexHookView(hook).agent();
+        return agent != address(0) ? agent : ICortexHookView(hook).admin();
     }
 
     /// @notice Burns every token the treasury holds (bought back, or received as LP fees). Permissionless.
@@ -107,10 +120,12 @@ contract CortexTreasury is IUnlockCallback, ReentrancyGuardTransient {
         if (!_reentrancyGuardEntered()) revert UnexpectedUnlock();
         uint256 ethIn = abi.decode(data, (uint256));
         PoolKey memory key = ICortexHookView(hook).poolKey();
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
+        // Buying the token lowers sqrtPrice (token per ETH). Stopping at this limit makes the hook revert the whole
+        // buyback (partial fills are rejected), so a buyback never executes beyond the ~2% impact bound.
+        uint160 limit = uint160(uint256(sqrtPriceX96) * MAX_IMPACT_SQRT_PRICE_PPM / 1_000_000);
         BalanceDelta delta = poolManager.swap(
-            key,
-            SwapParams({ zeroForOne: true, amountSpecified: -int256(ethIn), sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1 }),
-            ""
+            key, SwapParams({ zeroForOne: true, amountSpecified: -int256(ethIn), sqrtPriceLimitX96: limit }), ""
         );
         key.currency0.settle(poolManager, address(this), uint256(uint128(-delta.amount0())), false);
         uint256 bought = uint256(uint128(delta.amount1()));

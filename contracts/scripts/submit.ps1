@@ -8,6 +8,10 @@ if (-not $env:PROGRAMMABLE_API_KEY) {
   if (-not $env:PROGRAMMABLE_API_KEY) { throw "No API key entered." }
 }
 if (-not (Test-Path launch.json)) { throw "launch.json missing: run .\scripts\preflight.ps1 first." }
+$pre = Get-Content preflight-result.json -Raw | ConvertFrom-Json
+if ($pre.preflight.hardBlockFindingCodes.Count -ne 0 -or -not $pre.preflight.launchEligibility.deployable) {
+  throw "Preflight reports blocking findings; not submitting."
+}
 
 $cli = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "tools\cli4\node_modules\@programmable\launch\bin\programmable-launch.mjs"
 if (-not (Test-Path $cli)) { throw "CLI not found at $cli" }

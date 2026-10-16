@@ -36,8 +36,8 @@ interface ICortexTreasuryBinding {
 ///           - a treasury fee chosen by the AI agent (0%..3%, max 0.5% change per update, at least 15 minutes
 ///             between updates, every update expires within 24 hours back to the 0.70% base). Each update anchors
 ///             a hash and URI of the agent's published reasoning onchain.
-///           - during the first 30 blocks after launch, a linearly decaying anti-sniper fee (10% -> 0%) replaces
-///             the agent fee when higher. The launcher's own initial buy is exempt from it.
+///         There is no opening, anti-sniper or other time-based fee: from the first block the all-in hook fee is
+///         0.30% + the current treasury fee (0.30%..3.30%).
 ///         Accrued fees are paid out by the permissionless `distribute()`. The treasury fee can only fund
 ///         buyback-and-burn in `CortexTreasury`; nobody can withdraw it.
 contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
@@ -54,8 +54,6 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
     uint24 public constant AGENT_FEE_MAX_STEP_PPM = 5_000;
     uint32 public constant AGENT_MIN_UPDATE_INTERVAL = 15 minutes;
     uint32 public constant AGENT_MAX_TTL = 24 hours;
-    uint24 public constant SNIPE_FEE_START_PPM = 100_000;
-    uint64 public constant SNIPE_DECAY_BLOCKS = 30;
 
     bytes4 private constant DISTRIBUTE_UNLOCK_MAGIC = bytes4(keccak256("CORTEX_HOOK_DISTRIBUTE_V1"));
     Currency private constant NATIVE = Currency.wrap(address(0));
@@ -207,19 +205,9 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
         return block.timestamp >= agentFeeExpiresAt ? AGENT_FEE_BASE_PPM : agentFeePpm;
     }
 
-    function snipeFeePpm() public view returns (uint24) {
-        uint64 endBlock = launchBlock + SNIPE_DECAY_BLOCKS;
-        if (!poolRegistered || block.number >= endBlock) return 0;
-        return uint24(uint256(SNIPE_FEE_START_PPM) * (endBlock - block.number) / SNIPE_DECAY_BLOCKS);
-    }
-
-    /// @notice Treasury fee a swap from `sender` pays right now (platform fee excluded).
-    function treasuryFeePpmFor(address sender) public view returns (uint24 feePpm) {
-        feePpm = currentAgentFeePpm();
-        if (sender != registrar) {
-            uint24 snipe = snipeFeePpm();
-            if (snipe > feePpm) feePpm = snipe;
-        }
+    /// @notice Treasury fee every swap pays right now (platform fee excluded). Identical for all senders.
+    function treasuryFeePpmFor(address) public view returns (uint24) {
+        return currentAgentFeePpm();
     }
 
     /// @notice Fees for a swap whose gross ETH leg is known (exact-input buys, exact-input sells).

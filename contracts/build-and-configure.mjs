@@ -17,10 +17,12 @@ const EXPECTED_SOLC = "0.8.26+commit.8a97fa7a.Emscripten.clang";
 const POOL_MANAGER = "0x000000000004444c5dc75cB358380D2e3dE08A90";
 const NATIVE_CURRENCY = "0x0000000000000000000000000000000000000000";
 
-// Must match CortexLauncher.LP_FEE / TICK_SPACING and CortexHook.AGENT_FEE_BASE_PPM.
+// Must match CortexLauncher.LP_FEE / TICK_SPACING and CortexHook.AGENT_FEE_CAP_PPM.
 const LP_FEE = 3000;
 const TICK_SPACING = 60;
-const BASE_TREASURY_FEE_PPM = "7000";
+// The treasury (project) fee is variable: 0..3% chosen by the agent, 0.7% default. The declared selected rate is the
+// contract-enforced maximum so the declared economics bound every possible trade.
+const MAX_TREASURY_FEE_PPM = "30000";
 const MIN_TICK = -887272;
 const MAX_TICK = 887272;
 
@@ -56,6 +58,7 @@ Required environment (full build):
   PROGRAMMABLE_TOKEN_NAME                 1..64 UTF-8 bytes
   PROGRAMMABLE_TOKEN_SYMBOL               1..16 UTF-8 bytes, no whitespace
   PROGRAMMABLE_PROJECT_DESCRIPTION        20..4096 UTF-8 bytes, at least 8 letters or numbers
+  PROGRAMMABLE_PROJECT_DESCRIPTION_FILE   alternative: relative path of a UTF-8 text file (multi-line)
   PROGRAMMABLE_PROJECT_IMAGE_SOURCE_PATH  relative path of the local PNG/JPEG/WebP/GIF logo
   PROGRAMMABLE_PROJECT_IMAGE_URI          its public https://, ipfs:// or ar:// URI
   PROGRAMMABLE_WEBSITE_URL                public HTTPS website
@@ -181,7 +184,10 @@ const tokenSupply = canonicalUint(
   "PROGRAMMABLE_TOKEN_SUPPLY",
   { nonzero: true },
 );
-const description = publicText(required("PROGRAMMABLE_PROJECT_DESCRIPTION"), "PROGRAMMABLE_PROJECT_DESCRIPTION", 4096, {
+const descriptionRaw = process.env.PROGRAMMABLE_PROJECT_DESCRIPTION_FILE
+  ? (await readFile(path.join(root, process.env.PROGRAMMABLE_PROJECT_DESCRIPTION_FILE), "utf8")).replace(/\r\n/g, "\n").trim()
+  : required("PROGRAMMABLE_PROJECT_DESCRIPTION");
+const description = publicText(descriptionRaw, "PROGRAMMABLE_PROJECT_DESCRIPTION", 4096, {
   multiline: true,
 });
 if ([...description].length < 20 || [...description.matchAll(/[\p{L}\p{N}]/gu)].length < 8) {
@@ -241,12 +247,20 @@ const evidence = {
   hookPermissionMask: "0x20cc",
   platformFee: { rateBps: 30, recipient: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da", basis: "gross native ETH leg, rounded up" },
   treasuryFee: { basePpm: 7000, capPpm: 30000, maxStepPpm: 5000, minIntervalSeconds: 900, maxTtlSeconds: 86400 },
-  antiSnipe: { startPpm: 100000, decayBlocks: 30, launcherExempt: true },
+  openingFee: "none: identical fee schedule for every trader from the first block",
+  allInFeeBounds: {
+    hookMinimumPct: "0.3 (platform) + 0 (treasury)",
+    hookDefaultPct: "0.3 (platform) + 0.7 (treasury) = 1.0",
+    hookMaximumPct: "0.3 (platform) + 3.0 (treasury) = 3.3",
+    plusPoolLpFeePct: "0.3",
+    plusProgrammableRouterFeePct: "0.3 when routed through Programmable (not waived for a custom hook)",
+  },
+  buyback: { executor: "hook.agent, or hook.admin while no agent is set; never public", maxBalanceShare: "20%", cooldownSeconds: 3600, minTokensOut: "required nonzero", priceImpactBound: "~2% (sqrtPrice limit 0.989949x), else revert" },
   liquidity: { model: "single-sided token liquidity below the start price, no withdraw path", startTick, tickSpacing: TICK_SPACING },
   ownerControls: [
     "hook.admin (launch wallet) can rotate or revoke the agent key, and transfer or renounce admin",
     "hook.agent can set the treasury fee within the immutable guardrails above",
-    "treasury.buyback is agent-only while an agent is set, permissionless once revoked; 20% balance cap, 1h cooldown",
+    "treasury.buyback: only hook.agent (or hook.admin while no agent is set); 20% balance cap, 1h cooldown, nonzero minTokensOut, ~2% price-impact bound",
     "no mint, pause, blacklist, upgrade, proxy, selfdestruct or withdraw path in any contract",
   ],
 };
@@ -357,8 +371,8 @@ const config = {
     assessmentBase: "executed-gross-declared-quote",
     feeCurrency: "declared-quote-currency",
     claimMode: "claim-authority-selected-recipient",
-    applicantSelectedBuyHundredthsOfBip: BASE_TREASURY_FEE_PPM,
-    applicantSelectedSellHundredthsOfBip: BASE_TREASURY_FEE_PPM,
+    applicantSelectedBuyHundredthsOfBip: MAX_TREASURY_FEE_PPM,
+    applicantSelectedSellHundredthsOfBip: MAX_TREASURY_FEE_PPM,
   },
   permitWindow: { validAfter: String(now - 60), deadline: String(now + permitSeconds) },
   agentAttestation: { agentId: "cortex-build-and-configure", checkedAt, checks },

@@ -137,13 +137,14 @@ contract CortexTest is Test {
 
     // ------------------------------------------------------------ fees
 
-    function test_SnipeFeeDecays() public {
-        assertEq(hook.treasuryFeePpmFor(trader), 100_000);
-        assertEq(hook.treasuryFeePpmFor(address(launcher)), 7_000);
-        vm.roll(vm.getBlockNumber() + 15);
-        assertEq(hook.treasuryFeePpmFor(trader), 50_000);
-        vm.roll(vm.getBlockNumber() + 15);
+    function test_NoOpeningFee() public {
+        // Same block as the launch: a buy pays exactly 0.3% platform + 0.7% base treasury fee, nothing more.
         assertEq(hook.treasuryFeePpmFor(trader), 7_000);
+        (uint256 platformBefore, uint256 treasuryBefore) = _accrued();
+        _buy(1 ether);
+        (uint256 platformAfter, uint256 treasuryAfter) = _accrued();
+        assertEq(platformAfter - platformBefore, 0.003 ether);
+        assertEq(treasuryAfter - treasuryBefore, 0.007 ether);
     }
 
     function test_ExactInputBuyChargesGrossEthInput() public {
@@ -284,11 +285,11 @@ contract CortexTest is Test {
 
         vm.prank(stranger);
         vm.expectRevert(CortexTreasury.Unauthorized.selector);
-        treasury.buyback(balance / 10, 0, 0);
+        treasury.buyback(balance / 10, 1, 0);
 
         vm.prank(agent);
         vm.expectRevert(abi.encodeWithSelector(CortexTreasury.BuybackTooLarge.selector, balance, balance / 5));
-        treasury.buyback(balance, 0, 0);
+        treasury.buyback(balance, 1, 0);
 
         vm.prank(agent);
         uint256 burned = treasury.buyback(balance / 5, 1, keccak256("why"));
@@ -297,13 +298,53 @@ contract CortexTest is Test {
 
         vm.prank(agent);
         vm.expectRevert();
-        treasury.buyback(1, 0, 0);
+        treasury.buyback(1, 1, 0);
+    }
 
+    function test_BuybackRequiresMinimumOutput() public {
+        _pastSnipeWindow();
+        _buy(10 ether);
+        hook.distribute();
+        vm.prank(agent);
+        vm.expectRevert(CortexTreasury.ZeroMinimumOutput.selector);
+        treasury.buyback(address(treasury).balance / 5, 0, 0);
+    }
+
+    function test_BuybackNeverPublicAfterAgentRevoked() public {
+        _pastSnipeWindow();
+        _buy(10 ether);
+        hook.distribute();
         vm.prank(launchWallet);
         hook.setAgent(address(0));
+        assertEq(treasury.authorizedExecutor(), launchWallet);
+
+        vm.prank(stranger);
+        vm.expectRevert(CortexTreasury.Unauthorized.selector);
+        treasury.buyback(address(treasury).balance / 5, 1, 0);
+
+        vm.prank(launchWallet);
+        assertGt(treasury.buyback(address(treasury).balance / 5, 1, 0), 0);
+
+        // With both roles renounced nobody can trigger buybacks.
+        vm.prank(launchWallet);
+        hook.setAdmin(address(0));
         vm.warp(vm.getBlockTimestamp() + 1 hours);
         vm.prank(stranger);
-        treasury.buyback(address(treasury).balance / 5, 1, 0);
+        vm.expectRevert(CortexTreasury.Unauthorized.selector);
+        treasury.buyback(1, 1, 0);
+    }
+
+    function test_BuybackPriceImpactIsBounded() public {
+        _pastSnipeWindow();
+        // A treasury far larger than the pool's depth: 20% of it would move the price far more than 2%.
+        vm.deal(address(treasury), 500 ether);
+        vm.prank(agent);
+        vm.expectRevert();
+        treasury.buyback(100 ether, 1, 0);
+
+        // A small buyback within the bound succeeds.
+        vm.prank(agent);
+        assertGt(treasury.buyback(0.001 ether, 1, 0), 0);
     }
 
     function test_LpFeesFlowToTreasuryAndBurn() public {
@@ -325,7 +366,7 @@ contract CortexTest is Test {
     // ------------------------------------------------------------ helpers
 
     function _pastSnipeWindow() private {
-        vm.roll(vm.getBlockNumber() + hook.SNIPE_DECAY_BLOCKS());
+        vm.roll(vm.getBlockNumber() + 30);
     }
 
     function _buy(uint256 ethIn) private {

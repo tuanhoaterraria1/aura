@@ -12,7 +12,6 @@ export const hookAbi = parseAbi([
   "function agentFeeExpiresAt() view returns (uint64)",
   "function lastAgentUpdate() view returns (uint64)",
   "function regimeNonce() view returns (uint64)",
-  "function snipeFeePpm() view returns (uint24)",
   "function platformFeesAccrued() view returns (uint256)",
   "function treasuryFeesAccrued() view returns (uint256)",
   "function totalPlatformFees() view returns (uint256)",

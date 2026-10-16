@@ -25,9 +25,10 @@ Thêm vào đó là fair launch: 100% supply nằm trong LP single-sided bị kh
  CortexHook (beforeInitialize, before/afterSwap, before/afterSwapReturnDelta = mask 0x20cc)
    ├─ 0.30% platform fee trên ETH gross → 0xD88539d3c4C460136a733A3Fd60cf6BF269079da (yêu cầu của Programmable)
    ├─ treasury fee do AI agent đặt: 0%–3%, mỗi lần đổi ≤ 0.5%, cách nhau ≥ 15 phút, hết hạn ≤ 24h → về 0.7%
-   ├─ anti-sniper 30 block đầu: 10% giảm tuyến tính về 0 (launcher được miễn)
+   ├─ không có phí mở cửa / chống bot: mọi người cùng một biểu phí từ block đầu tiên
    └─ distribute(): ai cũng gọi được, người nhận cố định
- CortexTreasury: chỉ buyback-and-burn, tối đa 20% số dư/lần, cooldown 1h, không owner, không withdraw
+ CortexTreasury: chỉ buyback-and-burn, chỉ agent (hoặc admin khi không có agent) được gọi, tối đa 20% số dư/lần,
+   cooldown 1h, bắt buộc minTokensOut > 0, trượt giá tối đa ~2%, không owner, không withdraw
 
  agent/ (Node 24 + Claude Opus 5.5 + viem)
    snapshot onchain → Claude (structured output) → guardrails mirror → publish reasoning (hash) → tx
@@ -39,15 +40,14 @@ Thêm vào đó là fair launch: 100% supply nằm trong LP single-sided bị kh
 |---|---|---|---|
 | Platform (Programmable) | 0.30% cố định | ETH gross (vào khi mua, ra khi bán), làm tròn lên | `0xD885…79da` |
 | Treasury (AI) | 0%–3%, mặc định 0.70% | như trên | Treasury → buyback & burn |
-| Anti-sniper | 10% → 0% trong 30 block đầu | như trên (thay treasury fee nếu cao hơn) | Treasury |
 | LP fee của pool | 0.30% | input của swap | LP bị khoá → `collectLpFees()` → Treasury |
 
-Ví dụ ở chế độ mặc định, một lệnh mua 1 ETH tốn 0.003 ETH platform + 0.007 ETH treasury + 0.3% LP fee.
+Ví dụ ở chế độ mặc định, một lệnh mua 1 ETH tốn 0.003 ETH platform + 0.007 ETH treasury + 0.3% LP fee. Tối đa toàn phần: 3.6%/lệnh (cộng 0.3% router fee nếu giao dịch qua Programmable). Request khai báo mức trần treasury 3%.
 
 ### Quyền kiểm soát (cần công khai khi review)
 
 - `hook.admin` (= launch wallet): chỉ đổi hoặc thu hồi agent key, chuyển hoặc từ bỏ admin. Không đổi được phí, cap, người nhận.
-- `hook.agent`: chỉ `setAgentFee` trong guardrail. Thu hồi agent thì phí về 0.7%, và ai cũng gọi được `buyback`.
+- `hook.agent`: chỉ `setAgentFee` trong guardrail và gọi `buyback`. Thu hồi agent thì phí về 0.7% và quyền buyback chuyển cho admin; nếu cả hai bị từ bỏ thì buyback dừng hẳn (không bao giờ public).
 - Không có mint, pause, blacklist, proxy, upgrade, selfdestruct hay hàm rút tiền trong bất kỳ contract nào.
 
 ## Cấu trúc thư mục
