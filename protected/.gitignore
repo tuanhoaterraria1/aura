@@ -5,3 +5,6 @@ build-summary.json
 preflight-result.json
 submit-result.json
 .programmable-launch/
+build-log.txt
+preflight-log.txt
+submit-log.txt
