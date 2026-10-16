@@ -2,6 +2,8 @@
 
 > Tên "Cortex" chỉ là codename. Tên token, ticker, logo, website, X là do bạn cung cấp lúc build — script không tự bịa metadata.
 
+> **Cập nhật 2026-10-17:** theo yêu cầu review của Programmable, launch hiện dùng graph bảo vệ bắt buộc `@programmable/launch/launch-protection` v4.1.7 trong thư mục `protected/` (ProtectedLaunchTokenV1 + ProtectedNative30HookV1 + ProtectedNativeInitializerV1): 0.3% platform + 1% creator, phí mua mở cửa 99% giảm về bình thường trong 30 giây, giới hạn 2%/ví trong 300 giây, FDV mở cửa ≥ $15.000. Hook AI tuỳ chỉnh trong `contracts/` được giữ làm tham khảo; AI agent chạy off-chain.
+
 ## Narrative
 
 Ba narrative đang chạy cùng lúc, Cortex gom cả ba vào một coin:

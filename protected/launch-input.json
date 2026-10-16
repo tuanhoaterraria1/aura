@@ -1,0 +1,35 @@
+{
+    "launchWallet":  "0xf646de1394721A197f8e8CF1008B69189D391ee1",
+    "nonce":  "0xe7d7df092c71398f370cde1bd41a3a791a4023cae2b74fdf4653d9a6c1198d1e",
+    "supply":  "1000000000000000000000000000",
+    "creatorBuyFeeBps":  100,
+    "creatorSellFeeBps":  100,
+    "additionalTaxExemptWallets":  [
+
+                                   ],
+    "targetFdvUsd":  "18000",
+    "initialBuyWei":  "50000000000000000",
+    "publicOrigin":  {
+                         "url":  "https://github.com/tuanhoaterraria1/aura",
+                         "revision":  "0000000000000000000000000000000000000000"
+                     },
+    "token":  {
+                  "name":  "Aura coin 404",
+                  "symbol":  "AURA"
+              },
+    "descriptionFile":  "assets/description.txt",
+    "image":  {
+                  "sourcePath":  "assets/aura-logo.jpg",
+                  "uri":  "https://pbs.twimg.com/profile_images/2107755315634814976/iINgxfKg_400x400.jpg"
+              },
+    "links":  [
+                  {
+                      "kind":  "website",
+                      "uri":  "https://auracoin.cloud/"
+                  },
+                  {
+                      "kind":  "x",
+                      "uri":  "https://x.com/auracoin404"
+                  }
+              ]
+}

@@ -2,7 +2,7 @@
 # The API key is read with a hidden prompt, used only in this process, and never written anywhere.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
-$launchId = "add43883-1359-4d76-bcf2-ff01ab275a30"
+$launchId = if ($args.Count) { $args[0] } else { "6a925c3b-a9ee-41bc-a1bb-5cd7c1536de4" }
 if (-not $env:PROGRAMMABLE_API_KEY) {
   $secure = Read-Host "Paste your Programmable API key (input hidden), then press Enter" -AsSecureString
   $env:PROGRAMMABLE_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
