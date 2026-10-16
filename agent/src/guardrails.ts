@@ -10,6 +10,7 @@ export const MAX_TTL_MINUTES = 24 * 60;
 export const MIN_TTL_MINUTES = 15;
 export const BUYBACK_COOLDOWN = 60n * 60n;
 export const PLATFORM_FEE_PPM = 3_000;
+export const CREATOR_FEE_PPM = 10_000;
 /** Ignore fee changes smaller than this unless the current regime is about to lapse. */
 export const MIN_MEANINGFUL_CHANGE_PPM = 250;
 
@@ -76,7 +77,7 @@ export function applyGuardrails(decision: Decision, state: ChainState, slippageB
     } else {
       if (ethWei !== requested) notes.push(`buyback clamped to maxBuybackEth: ${ethWei} wei`);
       // Expected output at the spot price after the hook's fees, minus a slippage allowance.
-      const feeFactor = 1 - (PLATFORM_FEE_PPM + target) / 1_000_000 - 0.003;
+      const feeFactor = 1 - (PLATFORM_FEE_PPM + CREATOR_FEE_PPM + target) / 1_000_000 - 0.003;
       const expectedTokens = Number(ethWei) * state.tokensPerEth * feeFactor;
       const minTokensOut = BigInt(Math.floor(expectedTokens * (1 - slippageBps / 10_000)));
       buyback = { ethWei, minTokensOut: minTokensOut > 0n ? minTokensOut : 1n };

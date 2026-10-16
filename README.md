@@ -24,6 +24,7 @@ Thêm vào đó là fair launch: 100% supply nằm trong LP single-sided bị kh
                               └─ initial buy tuỳ chọn (msg.value) → token về launch wallet
  CortexHook (beforeInitialize, before/afterSwap, before/afterSwapReturnDelta = mask 0x20cc)
    ├─ 0.30% platform fee trên ETH gross → 0xD88539d3c4C460136a733A3Fd60cf6BF269079da (yêu cầu của Programmable)
+   ├─ 1.00% creator fee cố định → launch wallet (gắn lúc launch, không có hàm đổi)
    ├─ treasury fee do AI agent đặt: 0%–3%, mỗi lần đổi ≤ 0.5%, cách nhau ≥ 15 phút, hết hạn ≤ 24h → về 0.7%
    ├─ không có phí mở cửa / chống bot: mọi người cùng một biểu phí từ block đầu tiên
    └─ distribute(): ai cũng gọi được, người nhận cố định
@@ -39,10 +40,11 @@ Thêm vào đó là fair launch: 100% supply nằm trong LP single-sided bị kh
 | Thành phần | Mức | Tính trên | Đi đâu |
 |---|---|---|---|
 | Platform (Programmable) | 0.30% cố định | ETH gross (vào khi mua, ra khi bán), làm tròn lên | `0xD885…79da` |
+| Creator | 1% cố định | như trên | Launch wallet (creator) |
 | Treasury (AI) | 0%–3%, mặc định 0.70% | như trên | Treasury → buyback & burn |
 | LP fee của pool | 0.30% | input của swap | LP bị khoá → `collectLpFees()` → Treasury |
 
-Ví dụ ở chế độ mặc định, một lệnh mua 1 ETH tốn 0.003 ETH platform + 0.007 ETH treasury + 0.3% LP fee. Tối đa toàn phần: 3.6%/lệnh (cộng 0.3% router fee nếu giao dịch qua Programmable). Request khai báo mức trần treasury 3%.
+Ví dụ ở chế độ mặc định, một lệnh mua 1 ETH tốn 0.003 ETH platform + 0.01 ETH creator + 0.007 ETH treasury + 0.3% LP fee = 2.3%. Tối đa toàn phần: 4.6%/lệnh (cộng 0.3% router fee nếu giao dịch qua Programmable). Request khai báo phần project tối đa 4% (creator 1% + treasury 3%).
 
 ### Quyền kiểm soát (cần công khai khi review)
 

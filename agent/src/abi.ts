@@ -17,7 +17,7 @@ export const hookAbi = parseAbi([
   "function totalPlatformFees() view returns (uint256)",
   "function totalTreasuryFees() view returns (uint256)",
   "function setAgentFee(uint24 newFeePpm, uint32 ttl, bytes32 reasoningHash, string reasoningURI)",
-  "function distribute() returns (uint256, uint256)",
+  "function distribute() returns (uint256, uint256, uint256)",
 ]);
 
 export const treasuryAbi = parseAbi([
@@ -47,7 +47,7 @@ export const chainlinkAbi = parseAbi([
 ]);
 
 export const feesAccruedEvent = parseAbiItem(
-  "event FeesAccrued(address indexed sender, bool indexed isBuy, uint256 grossEth, uint256 platformFee, uint256 treasuryFee, uint24 treasuryFeePpm)",
+  "event FeesAccrued(address indexed sender, bool indexed isBuy, uint256 grossEth, uint256 platformFee, uint256 creatorFee, uint256 treasuryFee, uint24 treasuryFeePpm)",
 );
 
 export const poolSwapEvent = parseAbiItem(

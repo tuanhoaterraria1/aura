@@ -2,12 +2,13 @@ AURA is an AI agent that acts on-chain through a Uniswap v4 hook on Ethereum.
 
 Fees per trade, charged on the ETH side (input on buys, output on sells):
 - 0.3% Programmable platform fee (fixed).
+- 1% creator fee (fixed, paid to the launch wallet; cannot be changed).
 - AI treasury fee: variable 0%-3%, default 0.7%. The agent can change it by at most 0.5 percentage points per update, at most once every 15 minutes; each setting expires within 24 hours and falls back to 0.7%.
 - 0.3% pool LP fee.
 No opening, anti-sniper or time-based fee: the same schedule applies to everyone from the first block.
-Maximum all-in: 3.6% per trade (plus Programmable's 0.3% router fee when trading through Programmable).
+Default all-in: 2.3% per trade. Maximum all-in: 4.6% per trade (plus Programmable's 0.3% router fee when trading through Programmable).
 
-Powers: the agent wallet can only set the treasury fee within those limits and trigger treasury buybacks. The admin (launch wallet) can only rotate or revoke the agent and transfer or renounce admin. Nobody can mint, pause, blacklist, upgrade or withdraw.
+Powers: the agent wallet can only set the treasury fee within those limits and trigger treasury buybacks. The admin (launch wallet) can only rotate or revoke the agent and transfer or renounce admin. Nobody can change the platform or creator fee, mint, pause, blacklist, upgrade or withdraw.
 
 Treasury: treasury and LP fees can only be used to buy back and burn AURA. Buybacks are executed only by the agent (or the admin if no agent is set), at most 20% of the treasury per hour, with a required minimum output and a hard ~2% price-impact limit.
 

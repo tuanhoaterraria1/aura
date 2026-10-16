@@ -1,37 +1,35 @@
-Compiling 1 files with Solc 0.8.26
-Solc 0.8.26 finished in 11.14s
-Compiler run successful!
+No files changed, compilation skipped
 
 Ran 1 test for test/InitialBuy.t.sol:InitialBuyQuote
-[PASS] test_QuoteInitialBuy() (gas: 6833601)
+[PASS] test_QuoteInitialBuy() (gas: 6903635)
 Logs:
   initial buy wei      50000000000000000
-  tokens received      14556863985580800540627155
-  share of supply bps  145
+  tokens received      14411944073702698388304411
+  share of supply bps  144
   platform fee wei     150000000000000
   treasury fee wei     350000000000000
 
-Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.06ms (688.00µs CPU time)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.14ms (765.60µs CPU time)
 
 Ran 18 tests for test/Cortex.t.sol:CortexTest
-[PASS] testFuzz_FeesForNetCoverGross(uint96,uint24) (runs: 512, μ: 15098, ~: 15040)
-[PASS] test_AgentCannotExceedCapOrTtl() (gas: 85691)
-[PASS] test_AgentUpdatesWithinGuardrails() (gas: 57166)
-[PASS] test_BuybackBurnsAndIsBounded() (gas: 422605)
-[PASS] test_BuybackNeverPublicAfterAgentRevoked() (gas: 429439)
-[PASS] test_BuybackPriceImpactIsBounded() (gas: 384476)
-[PASS] test_BuybackRequiresMinimumOutput() (gas: 235913)
-[PASS] test_DistributePaysFixedRecipients() (gas: 87558)
-[PASS] test_ExactInputBuyChargesGrossEthInput() (gas: 173657)
-[PASS] test_ExactInputSellChargesGrossEthOutput() (gas: 246773)
-[PASS] test_ExactOutputBuyCoversRateOnGrossInput() (gas: 179639)
-[PASS] test_ExactOutputSellCoversRateOnGrossOutput() (gas: 263460)
+[PASS] testFuzz_FeesForNetCoverGross(uint96,uint24) (runs: 512, μ: 16576, ~: 16517)
+[PASS] test_AgentCannotExceedCapOrTtl() (gas: 86043)
+[PASS] test_AgentUpdatesWithinGuardrails() (gas: 57386)
+[PASS] test_BuybackBurnsAndIsBounded() (gas: 450890)
+[PASS] test_BuybackNeverPublicAfterAgentRevoked() (gas: 458218)
+[PASS] test_BuybackPriceImpactIsBounded() (gas: 407518)
+[PASS] test_BuybackRequiresMinimumOutput() (gas: 257248)
+[PASS] test_DistributePaysFixedRecipients() (gas: 107014)
+[PASS] test_ExactInputBuyChargesGrossEthInput() (gas: 187260)
+[PASS] test_ExactInputSellChargesGrossEthOutput() (gas: 262706)
+[PASS] test_ExactOutputBuyCoversRateOnGrossInput() (gas: 193647)
+[PASS] test_ExactOutputSellCoversRateOnGrossOutput() (gas: 283624)
 [PASS] test_LaunchIsOneShotAndWalletBound() (gas: 22810)
-[PASS] test_LaunchLocksSupplyAndChargesInitialBuy() (gas: 41067)
-[PASS] test_LpFeesFlowToTreasuryAndBurn() (gas: 401478)
-[PASS] test_NoOpeningFee() (gas: 171061)
-[PASS] test_OnlyAgentAndAdminControls() (gas: 65363)
-[PASS] test_OnlyLauncherRegistersAndNoForeignPools() (gas: 506904)
-Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 12.08ms (14.89ms CPU time)
+[PASS] test_LaunchLocksSupplyAndChargesInitialBuy() (gas: 48571)
+[PASS] test_LpFeesFlowToTreasuryAndBurn() (gas: 415612)
+[PASS] test_NoOpeningFee() (gas: 184668)
+[PASS] test_OnlyAgentAndAdminControls() (gas: 65627)
+[PASS] test_OnlyLauncherRegistersAndNoForeignPools() (gas: 507014)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 12.36ms (16.36ms CPU time)
 
-Ran 2 test suites in 13.18ms (13.14ms CPU time): 19 tests passed, 0 failed, 0 skipped (19 total tests)
+Ran 2 test suites in 13.36ms (13.50ms CPU time): 19 tests passed, 0 failed, 0 skipped (19 total tests)

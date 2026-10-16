@@ -19,7 +19,7 @@ interface ICortexHookView {
     function poolKey() external view returns (PoolKey memory);
     function treasuryFeesAccrued() external view returns (uint256);
     function platformFeesAccrued() external view returns (uint256);
-    function distribute() external returns (uint256, uint256);
+    function distribute() external returns (uint256, uint256, uint256);
 }
 
 /// @title CortexTreasury

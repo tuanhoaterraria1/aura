@@ -108,9 +108,12 @@ contract CortexTest is Test {
         assertGt(launcher.lockedLiquidity(), 0);
         assertEq(token.balanceOf(address(launcher)), 0, "no supply left in launcher");
         assertGt(token.balanceOf(launchWallet), 0, "initial buy delivered");
-        // Launcher pays the platform fee and base treasury fee, but no anti-sniper fee.
-        assertEq(hook.platformFeesAccrued(), 0.003 ether);
-        assertEq(hook.treasuryFeesAccrued(), 0.007 ether);
+        assertEq(hook.creatorFeeRecipient(), launchWallet);
+        // The 1 ETH initial buy pays 0.3% platform + 1% creator + 0.7% base treasury fee.
+        (uint256 platform, uint256 creator, uint256 treasuryFee) = _accrued();
+        assertEq(platform, 0.003 ether);
+        assertEq(creator, 0.01 ether);
+        assertEq(treasuryFee, 0.007 ether);
     }
 
     function test_LaunchIsOneShotAndWalletBound() public {
@@ -138,88 +141,96 @@ contract CortexTest is Test {
     // ------------------------------------------------------------ fees
 
     function test_NoOpeningFee() public {
-        // Same block as the launch: a buy pays exactly 0.3% platform + 0.7% base treasury fee, nothing more.
+        // Same block as the launch: a buy pays exactly 0.3% + 1% + 0.7%, nothing more.
         assertEq(hook.treasuryFeePpmFor(trader), 7_000);
-        (uint256 platformBefore, uint256 treasuryBefore) = _accrued();
+        (uint256 p0, uint256 c0, uint256 t0) = _accrued();
         _buy(1 ether);
-        (uint256 platformAfter, uint256 treasuryAfter) = _accrued();
-        assertEq(platformAfter - platformBefore, 0.003 ether);
-        assertEq(treasuryAfter - treasuryBefore, 0.007 ether);
+        (uint256 p1, uint256 c1, uint256 t1) = _accrued();
+        assertEq(p1 - p0, 0.003 ether);
+        assertEq(c1 - c0, 0.01 ether);
+        assertEq(t1 - t0, 0.007 ether);
     }
 
     function test_ExactInputBuyChargesGrossEthInput() public {
         _pastSnipeWindow();
-        (uint256 platformBefore, uint256 treasuryBefore) = _accrued();
+        (uint256 p0, uint256 c0, uint256 t0) = _accrued();
         uint256 ethBefore = trader.balance;
         vm.prank(trader);
         router.swap{ value: 1 ether }(key, true, -1 ether);
         assertEq(ethBefore - trader.balance, 1 ether);
-        (uint256 platformAfter, uint256 treasuryAfter) = _accrued();
-        assertEq(platformAfter - platformBefore, 0.003 ether);
-        assertEq(treasuryAfter - treasuryBefore, 0.007 ether);
+        (uint256 p1, uint256 c1, uint256 t1) = _accrued();
+        assertEq(p1 - p0, 0.003 ether);
+        assertEq(c1 - c0, 0.01 ether);
+        assertEq(t1 - t0, 0.007 ether);
     }
 
     function test_ExactInputSellChargesGrossEthOutput() public {
         _pastSnipeWindow();
         _buy(2 ether);
         uint256 tokens = token.balanceOf(trader);
-        (uint256 platformBefore, uint256 treasuryBefore) = _accrued();
+        (uint256 p0, uint256 c0, uint256 t0) = _accrued();
         uint256 ethBefore = trader.balance;
         vm.prank(trader);
         router.swap(key, false, -int256(tokens));
         uint256 received = trader.balance - ethBefore;
-        (uint256 platformAfter, uint256 treasuryAfter) = _accrued();
-        uint256 platformFee = platformAfter - platformBefore;
-        uint256 gross = received + platformFee + (treasuryAfter - treasuryBefore);
-        assertEq(platformFee, _ceil(gross, 3_000));
-        assertEq(treasuryAfter - treasuryBefore, _ceil(gross, 7_000));
+        (uint256 p1, uint256 c1, uint256 t1) = _accrued();
+        uint256 gross = received + (p1 - p0) + (c1 - c0) + (t1 - t0);
+        assertEq(p1 - p0, _ceil(gross, 3_000));
+        assertEq(c1 - c0, _ceil(gross, 10_000));
+        assertEq(t1 - t0, _ceil(gross, 7_000));
     }
 
     function test_ExactOutputBuyCoversRateOnGrossInput() public {
         _pastSnipeWindow();
-        (uint256 platformBefore,) = _accrued();
+        (uint256 p0, uint256 c0,) = _accrued();
         uint256 ethBefore = trader.balance;
         vm.prank(trader);
         router.swap{ value: 5 ether }(key, true, int256(1_000_000 ether));
         assertEq(token.balanceOf(trader), 1_000_000 ether);
         uint256 grossPaid = ethBefore - trader.balance;
-        (uint256 platformAfter,) = _accrued();
-        assertGe((platformAfter - platformBefore) * PPM, grossPaid * 3_000);
+        (uint256 p1, uint256 c1,) = _accrued();
+        assertGe((p1 - p0) * PPM, grossPaid * 3_000);
+        assertGe((c1 - c0) * PPM + 2 * PPM, grossPaid * 10_000);
     }
 
     function test_ExactOutputSellCoversRateOnGrossOutput() public {
         _pastSnipeWindow();
         _buy(2 ether);
-        (uint256 platformBefore, uint256 treasuryBefore) = _accrued();
+        (uint256 p0, uint256 c0, uint256 t0) = _accrued();
         uint256 ethBefore = trader.balance;
         vm.prank(trader);
         router.swap(key, false, int256(0.5 ether));
         assertEq(trader.balance - ethBefore, 0.5 ether);
-        (uint256 platformAfter, uint256 treasuryAfter) = _accrued();
-        uint256 platformFee = platformAfter - platformBefore;
-        uint256 gross = 0.5 ether + platformFee + (treasuryAfter - treasuryBefore);
-        assertGe(platformFee * PPM, gross * 3_000);
+        (uint256 p1, uint256 c1, uint256 t1) = _accrued();
+        uint256 gross = 0.5 ether + (p1 - p0) + (c1 - c0) + (t1 - t0);
+        assertGe((p1 - p0) * PPM, gross * 3_000);
+        assertGe(((p1 - p0) + (c1 - c0) + (t1 - t0)) * PPM, gross * 20_000);
     }
 
     function test_DistributePaysFixedRecipients() public {
-        (uint256 platformAccrued, uint256 treasuryAccrued) = _accrued();
+        (uint256 platform, uint256 creator, uint256 treasuryFee) = _accrued();
         uint256 platformBefore = PLATFORM.balance;
+        uint256 creatorBefore = launchWallet.balance;
         vm.prank(stranger);
         hook.distribute();
-        assertEq(PLATFORM.balance - platformBefore, platformAccrued);
-        assertEq(address(treasury).balance, treasuryAccrued);
-        (platformAccrued, treasuryAccrued) = _accrued();
-        assertEq(platformAccrued + treasuryAccrued, 0);
+        assertEq(PLATFORM.balance - platformBefore, platform);
+        assertEq(launchWallet.balance - creatorBefore, creator);
+        assertEq(address(treasury).balance, treasuryFee);
+        (platform, creator, treasuryFee) = _accrued();
+        assertEq(platform + creator + treasuryFee, 0);
         vm.expectRevert(CortexHook.NothingToDistribute.selector);
         hook.distribute();
     }
 
     function testFuzz_FeesForNetCoverGross(uint96 net, uint24 treasuryPpm) public view {
         treasuryPpm = uint24(bound(treasuryPpm, 0, 100_000));
-        (uint256 platformFee, uint256 treasuryFee) = hook.feesForNet(net, treasuryPpm);
-        uint256 gross = uint256(net) + platformFee + treasuryFee;
-        assertGe(platformFee * PPM, gross * 3_000);
-        assertGe((platformFee + treasuryFee) * PPM, gross * (3_000 + uint256(treasuryPpm)));
+        CortexHook.Fees memory fees = hook.feesForNet(net, treasuryPpm);
+        uint256 total = fees.platform + fees.creator + fees.treasury;
+        uint256 gross = uint256(net) + total;
+        assertGe(fees.platform * PPM, gross * 3_000);
+        assertGe(total * PPM, gross * (13_000 + uint256(treasuryPpm)));
+        // The creator share never undercuts its rate by more than rounding dust.
+        assertGe(fees.creator * PPM + 2 * PPM, gross * 10_000);
     }
 
     // ------------------------------------------------------------ agent guardrails
@@ -374,8 +385,8 @@ contract CortexTest is Test {
         router.swap{ value: ethIn }(key, true, -int256(ethIn));
     }
 
-    function _accrued() private view returns (uint256, uint256) {
-        return (hook.platformFeesAccrued(), hook.treasuryFeesAccrued());
+    function _accrued() private view returns (uint256, uint256, uint256) {
+        return (hook.platformFeesAccrued(), hook.creatorFeesAccrued(), hook.treasuryFeesAccrued());
     }
 
     function _ceil(uint256 amount, uint256 ppm) private pure returns (uint256) {

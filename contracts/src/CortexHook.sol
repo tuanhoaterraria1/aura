@@ -33,29 +33,37 @@ interface ICortexTreasuryBinding {
 ///
 ///         Every buy and sell is charged on its gross native ETH leg (input on buys, output on sells), rounded up:
 ///           - 0.30% platform fee, accrued as backed PoolManager claims for the fixed Programmable recipient.
+///           - 1.00% creator fee, fixed forever, for the creator recipient bound at launch (the launch wallet).
 ///           - a treasury fee chosen by the AI agent (0%..3%, max 0.5% change per update, at least 15 minutes
 ///             between updates, every update expires within 24 hours back to the 0.70% base). Each update anchors
 ///             a hash and URI of the agent's published reasoning onchain.
 ///         There is no opening, anti-sniper or other time-based fee: from the first block the all-in hook fee is
-///         0.30% + the current treasury fee (0.30%..3.30%).
-///         Accrued fees are paid out by the permissionless `distribute()`. The treasury fee can only fund
-///         buyback-and-burn in `CortexTreasury`; nobody can withdraw it.
+///         1.30% + the current treasury fee (1.30%..4.30%).
+///         Accrued fees are paid out by the permissionless `distribute()` to their fixed recipients. The treasury fee
+///         can only fund buyback-and-burn in `CortexTreasury`; nobody can withdraw it.
 contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
     using CurrencySettler for Currency;
     using LPFeeLibrary for uint24;
     using SafeCast for *;
 
+    struct Fees {
+        uint256 platform;
+        uint256 creator;
+        uint256 treasury;
+    }
+
     uint256 public constant PPM = 1_000_000;
     address public constant PLATFORM_FEE_RECIPIENT = 0xD88539d3c4C460136a733A3Fd60cf6BF269079da;
     uint24 public constant PLATFORM_FEE_PPM = 3_000;
+    uint24 public constant CREATOR_FEE_PPM = 10_000;
     uint24 public constant AGENT_FEE_BASE_PPM = 7_000;
     uint24 public constant AGENT_FEE_CAP_PPM = 30_000;
     uint24 public constant AGENT_FEE_MAX_STEP_PPM = 5_000;
     uint32 public constant AGENT_MIN_UPDATE_INTERVAL = 15 minutes;
     uint32 public constant AGENT_MAX_TTL = 24 hours;
 
-    bytes4 private constant DISTRIBUTE_UNLOCK_MAGIC = bytes4(keccak256("CORTEX_HOOK_DISTRIBUTE_V1"));
+    bytes4 private constant DISTRIBUTE_UNLOCK_MAGIC = bytes4(keccak256("CORTEX_HOOK_DISTRIBUTE_V2"));
     Currency private constant NATIVE = Currency.wrap(address(0));
 
     /// @notice Launcher allowed to bind and initialize the single pool.
@@ -65,6 +73,8 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
     bytes32 public poolId;
     PoolKey private _poolKey;
     address public treasury;
+    /// @notice Receives the fixed creator fee. Bound once at launch; there is no setter.
+    address public creatorFeeRecipient;
     address public admin;
     address public agent;
     uint64 public launchBlock;
@@ -75,8 +85,10 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
     uint64 public regimeNonce;
 
     uint256 public platformFeesAccrued;
+    uint256 public creatorFeesAccrued;
     uint256 public treasuryFeesAccrued;
     uint256 public totalPlatformFees;
+    uint256 public totalCreatorFees;
     uint256 public totalTreasuryFees;
     uint256 private _pendingSpecifiedPoolAmountPlusOne;
 
@@ -96,17 +108,23 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
     error ZeroAddress();
 
     event PoolRegistered(
-        bytes32 indexed poolId, address indexed token, address indexed treasury, address admin, address agent
+        bytes32 indexed poolId,
+        address indexed token,
+        address indexed treasury,
+        address creatorFeeRecipient,
+        address admin,
+        address agent
     );
     event FeesAccrued(
         address indexed sender,
         bool indexed isBuy,
         uint256 grossEth,
         uint256 platformFee,
+        uint256 creatorFee,
         uint256 treasuryFee,
         uint24 treasuryFeePpm
     );
-    event FeesDistributed(uint256 platformAmount, uint256 treasuryAmount);
+    event FeesDistributed(uint256 platformAmount, uint256 creatorAmount, uint256 treasuryAmount);
     event AgentRegimeUpdated(
         uint64 indexed nonce,
         uint24 fromPpm,
@@ -126,6 +144,7 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
     // ---------------------------------------------------------------- launch
 
     /// @notice Binds the one supported ETH/token pool and initializes it. Callable once, by the launcher only.
+    ///         The launch wallet becomes both the admin and the permanent creator fee recipient.
     function registerPool(
         PoolKey calldata key,
         address treasury_,
@@ -143,12 +162,13 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
         poolId = PoolId.unwrap(key.toId());
         poolRegistered = true;
         treasury = treasury_;
+        creatorFeeRecipient = admin_;
         admin = admin_;
         agent = agent_;
         agentFeePpm = AGENT_FEE_BASE_PPM;
         launchBlock = uint64(block.number);
 
-        emit PoolRegistered(poolId, Currency.unwrap(key.currency1), treasury_, admin_, agent_);
+        emit PoolRegistered(poolId, Currency.unwrap(key.currency1), treasury_, admin_, admin_, agent_);
         tick = poolManager.initialize(key, sqrtPriceX96);
     }
 
@@ -194,7 +214,8 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
         }
     }
 
-    /// @notice Transfers or renounces (address(0)) the admin role. The admin can only rotate the agent key.
+    /// @notice Transfers or renounces (address(0)) the admin role. The admin can only rotate the agent key; it cannot
+    ///         change any fee rate or the creator fee recipient.
     function setAdmin(address newAdmin) external {
         if (msg.sender != admin) revert Unauthorized();
         emit AdminChanged(admin, newAdmin);
@@ -205,57 +226,67 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
         return block.timestamp >= agentFeeExpiresAt ? AGENT_FEE_BASE_PPM : agentFeePpm;
     }
 
-    /// @notice Treasury fee every swap pays right now (platform fee excluded). Identical for all senders.
+    /// @notice Treasury fee every swap pays right now (platform and creator fees excluded). Same for all senders.
     function treasuryFeePpmFor(address) public view returns (uint24) {
         return currentAgentFeePpm();
     }
 
     /// @notice Fees for a swap whose gross ETH leg is known (exact-input buys, exact-input sells).
-    function feesForGross(uint256 grossEth, uint24 treasuryPpm)
-        public
-        pure
-        returns (uint256 platformFee, uint256 treasuryFee)
-    {
-        platformFee = FullMath.mulDivRoundingUp(grossEth, PLATFORM_FEE_PPM, PPM);
-        treasuryFee = FullMath.mulDivRoundingUp(grossEth, treasuryPpm, PPM);
+    function feesForGross(uint256 grossEth, uint24 treasuryPpm) public pure returns (Fees memory fees) {
+        fees.platform = FullMath.mulDivRoundingUp(grossEth, PLATFORM_FEE_PPM, PPM);
+        fees.creator = FullMath.mulDivRoundingUp(grossEth, CREATOR_FEE_PPM, PPM);
+        fees.treasury = FullMath.mulDivRoundingUp(grossEth, treasuryPpm, PPM);
     }
 
     /// @notice Fees for a swap where only the ETH leg net of fees is known (exact-output buys and sells).
-    ///         The fee is sized so that it covers the full rate on the resulting gross leg `net + fee`.
-    function feesForNet(uint256 netEth, uint24 treasuryPpm)
-        public
-        pure
-        returns (uint256 platformFee, uint256 treasuryFee)
-    {
-        uint256 rate = uint256(PLATFORM_FEE_PPM) + treasuryPpm;
-        uint256 totalFee = FullMath.mulDivRoundingUp(netEth, rate, PPM - rate);
-        platformFee = FullMath.mulDivRoundingUp(netEth + totalFee, PLATFORM_FEE_PPM, PPM);
-        treasuryFee = totalFee - platformFee;
+    ///         The total is sized to cover the full combined rate on the resulting gross leg `net + total`; the
+    ///         platform share is the full rounded-up 0.3% of that gross leg.
+    function feesForNet(uint256 netEth, uint24 treasuryPpm) public pure returns (Fees memory fees) {
+        uint256 rate = uint256(PLATFORM_FEE_PPM) + CREATOR_FEE_PPM + treasuryPpm;
+        uint256 total = FullMath.mulDivRoundingUp(netEth, rate, PPM - rate);
+        uint256 gross = netEth + total;
+        fees.platform = FullMath.mulDivRoundingUp(gross, PLATFORM_FEE_PPM, PPM);
+        uint256 creator = FullMath.mulDivRoundingUp(gross, CREATOR_FEE_PPM, PPM);
+        uint256 remaining = total - fees.platform;
+        fees.creator = creator < remaining ? creator : remaining;
+        fees.treasury = remaining - fees.creator;
+    }
+
+    function totalFee(Fees memory fees) public pure returns (uint256) {
+        return fees.platform + fees.creator + fees.treasury;
     }
 
     // ---------------------------------------------------------------- payout
 
-    /// @notice Pays every accrued fee: platform share to the fixed Programmable recipient, the rest to the treasury.
-    ///         Permissionless; recipients are fixed.
-    function distribute() external nonReentrant returns (uint256 platformAmount, uint256 treasuryAmount) {
+    /// @notice Pays every accrued fee to its fixed recipient: Programmable, the creator and the treasury.
+    ///         Permissionless; recipients cannot be chosen by the caller.
+    function distribute()
+        external
+        nonReentrant
+        returns (uint256 platformAmount, uint256 creatorAmount, uint256 treasuryAmount)
+    {
         platformAmount = platformFeesAccrued;
+        creatorAmount = creatorFeesAccrued;
         treasuryAmount = treasuryFeesAccrued;
-        if (platformAmount + treasuryAmount == 0) revert NothingToDistribute();
+        if (platformAmount + creatorAmount + treasuryAmount == 0) revert NothingToDistribute();
         platformFeesAccrued = 0;
+        creatorFeesAccrued = 0;
         treasuryFeesAccrued = 0;
-        bytes memory result =
-            poolManager.unlock(abi.encode(DISTRIBUTE_UNLOCK_MAGIC, platformAmount, treasuryAmount));
+        bytes memory result = poolManager.unlock(
+            abi.encode(DISTRIBUTE_UNLOCK_MAGIC, Fees({ platform: platformAmount, creator: creatorAmount, treasury: treasuryAmount }))
+        );
         if (result.length != 0) revert UnexpectedUnlock();
-        emit FeesDistributed(platformAmount, treasuryAmount);
+        emit FeesDistributed(platformAmount, creatorAmount, treasuryAmount);
     }
 
     function unlockCallback(bytes calldata data) external onlyPoolManager returns (bytes memory) {
         if (!_reentrancyGuardEntered()) revert UnexpectedUnlock();
-        (bytes4 magic, uint256 platformAmount, uint256 treasuryAmount) = abi.decode(data, (bytes4, uint256, uint256));
+        (bytes4 magic, Fees memory fees) = abi.decode(data, (bytes4, Fees));
         if (magic != DISTRIBUTE_UNLOCK_MAGIC) revert UnexpectedUnlock();
-        NATIVE.settle(poolManager, address(this), platformAmount + treasuryAmount, true);
-        if (platformAmount != 0) NATIVE.take(poolManager, PLATFORM_FEE_RECIPIENT, platformAmount, false);
-        if (treasuryAmount != 0) NATIVE.take(poolManager, treasury, treasuryAmount, false);
+        NATIVE.settle(poolManager, address(this), totalFee(fees), true);
+        if (fees.platform != 0) NATIVE.take(poolManager, PLATFORM_FEE_RECIPIENT, fees.platform, false);
+        if (fees.creator != 0) NATIVE.take(poolManager, creatorFeeRecipient, fees.creator, false);
+        if (fees.treasury != 0) NATIVE.take(poolManager, treasury, fees.treasury, false);
         return "";
     }
 
@@ -298,26 +329,25 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
         if (params.zeroForOne != exactInput) return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         if (_pendingSpecifiedPoolAmountPlusOne != 0) revert PendingSpecifiedSwap();
 
-        bool isBuy = params.zeroForOne;
         uint24 treasuryPpm = treasuryFeePpmFor(sender);
         uint256 specified = SignedMath.abs(params.amountSpecified);
-        uint256 platformFee;
-        uint256 treasuryFee;
+        Fees memory fees;
         uint256 expectedPoolAmount;
         if (exactInput) {
             // Exact-input buy: `specified` is the gross ETH input.
-            (platformFee, treasuryFee) = feesForGross(specified, treasuryPpm);
-            if (platformFee + treasuryFee >= specified) revert FeeExceedsAmount(specified, platformFee + treasuryFee);
-            expectedPoolAmount = specified - platformFee - treasuryFee;
-            _accrue(sender, isBuy, specified, platformFee, treasuryFee, treasuryPpm);
+            fees = feesForGross(specified, treasuryPpm);
+            uint256 total = totalFee(fees);
+            if (total >= specified) revert FeeExceedsAmount(specified, total);
+            expectedPoolAmount = specified - total;
+            _accrue(sender, true, specified, fees, treasuryPpm);
         } else {
             // Exact-output sell: `specified` is the net ETH the seller receives; the pool pays out net + fee.
-            (platformFee, treasuryFee) = feesForNet(specified, treasuryPpm);
-            expectedPoolAmount = specified + platformFee + treasuryFee;
-            _accrue(sender, isBuy, expectedPoolAmount, platformFee, treasuryFee, treasuryPpm);
+            fees = feesForNet(specified, treasuryPpm);
+            expectedPoolAmount = specified + totalFee(fees);
+            _accrue(sender, false, expectedPoolAmount, fees, treasuryPpm);
         }
         _pendingSpecifiedPoolAmountPlusOne = expectedPoolAmount + 1;
-        return (IHooks.beforeSwap.selector, toBeforeSwapDelta(_toInt128(platformFee + treasuryFee), 0), 0);
+        return (IHooks.beforeSwap.selector, toBeforeSwapDelta(_toInt128(totalFee(fees)), 0), 0);
     }
 
     function _afterSwap(address sender, PoolKey calldata key, SwapParams calldata params, BalanceDelta delta, bytes calldata)
@@ -338,42 +368,36 @@ contract CortexHook is BaseHook, IUnlockCallback, ReentrancyGuardTransient {
             return (IHooks.afterSwap.selector, 0);
         }
 
-        bool isBuy = params.zeroForOne;
         uint24 treasuryPpm = treasuryFeePpmFor(sender);
-        uint256 platformFee;
-        uint256 treasuryFee;
+        Fees memory fees;
         if (exactInput) {
             // Exact-input sell: the pool's ETH output is the gross ETH leg; the fee comes out of it.
-            (platformFee, treasuryFee) = feesForGross(poolEth, treasuryPpm);
-            if (platformFee + treasuryFee >= poolEth) revert FeeExceedsAmount(poolEth, platformFee + treasuryFee);
-            _accrue(sender, isBuy, poolEth, platformFee, treasuryFee, treasuryPpm);
+            fees = feesForGross(poolEth, treasuryPpm);
+            uint256 total = totalFee(fees);
+            if (total >= poolEth) revert FeeExceedsAmount(poolEth, total);
+            _accrue(sender, false, poolEth, fees, treasuryPpm);
         } else {
             // Exact-output buy: the buyer pays the pool's ETH input plus the fee on top.
-            (platformFee, treasuryFee) = feesForNet(poolEth, treasuryPpm);
-            _accrue(sender, isBuy, poolEth + platformFee + treasuryFee, platformFee, treasuryFee, treasuryPpm);
+            fees = feesForNet(poolEth, treasuryPpm);
+            _accrue(sender, true, poolEth + totalFee(fees), fees, treasuryPpm);
         }
-        return (IHooks.afterSwap.selector, _toInt128(platformFee + treasuryFee));
+        return (IHooks.afterSwap.selector, _toInt128(totalFee(fees)));
     }
 
     // ---------------------------------------------------------------- internals
 
-    function _accrue(
-        address sender,
-        bool isBuy,
-        uint256 grossEth,
-        uint256 platformFee,
-        uint256 treasuryFee,
-        uint24 treasuryPpm
-    ) private {
+    function _accrue(address sender, bool isBuy, uint256 grossEth, Fees memory fees, uint24 treasuryPpm) private {
         if (grossEth == 0) return;
-        platformFeesAccrued += platformFee;
-        treasuryFeesAccrued += treasuryFee;
-        totalPlatformFees += platformFee;
-        totalTreasuryFees += treasuryFee;
-        emit FeesAccrued(sender, isBuy, grossEth, platformFee, treasuryFee, treasuryPpm);
+        platformFeesAccrued += fees.platform;
+        creatorFeesAccrued += fees.creator;
+        treasuryFeesAccrued += fees.treasury;
+        totalPlatformFees += fees.platform;
+        totalCreatorFees += fees.creator;
+        totalTreasuryFees += fees.treasury;
+        emit FeesAccrued(sender, isBuy, grossEth, fees.platform, fees.creator, fees.treasury, treasuryPpm);
         // Backed ERC-6909 claims: no ETH leaves the PoolManager mid-swap, so this works before the swapper settles.
-        uint256 totalFee = platformFee + treasuryFee;
-        if (totalFee != 0) NATIVE.take(poolManager, address(this), totalFee, true);
+        uint256 total = totalFee(fees);
+        if (total != 0) NATIVE.take(poolManager, address(this), total, true);
     }
 
     function _requirePool(PoolKey calldata key) private view {

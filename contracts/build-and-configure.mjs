@@ -17,12 +17,12 @@ const EXPECTED_SOLC = "0.8.26+commit.8a97fa7a.Emscripten.clang";
 const POOL_MANAGER = "0x000000000004444c5dc75cB358380D2e3dE08A90";
 const NATIVE_CURRENCY = "0x0000000000000000000000000000000000000000";
 
-// Must match CortexLauncher.LP_FEE / TICK_SPACING and CortexHook.AGENT_FEE_CAP_PPM.
+// Must match CortexLauncher.LP_FEE / TICK_SPACING and CortexHook.CREATOR_FEE_PPM + AGENT_FEE_CAP_PPM.
 const LP_FEE = 3000;
 const TICK_SPACING = 60;
-// The treasury (project) fee is variable: 0..3% chosen by the agent, 0.7% default. The declared selected rate is the
-// contract-enforced maximum so the declared economics bound every possible trade.
-const MAX_TREASURY_FEE_PPM = "30000";
+// Project fee on top of the 0.3% platform fee = fixed 1% creator fee + variable 0..3% treasury fee (0.7% default).
+// The declared selected rate is the contract-enforced maximum (4%) so the declared economics bound every trade.
+const MAX_TREASURY_FEE_PPM = "40000";
 const MIN_TICK = -887272;
 const MAX_TICK = 887272;
 
@@ -246,12 +246,13 @@ const evidence = {
   sizes: sizeReport,
   hookPermissionMask: "0x20cc",
   platformFee: { rateBps: 30, recipient: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da", basis: "gross native ETH leg, rounded up" },
+  creatorFee: { ratePpm: 10000, recipient: "launch wallet, bound at registration, no setter" },
   treasuryFee: { basePpm: 7000, capPpm: 30000, maxStepPpm: 5000, minIntervalSeconds: 900, maxTtlSeconds: 86400 },
   openingFee: "none: identical fee schedule for every trader from the first block",
   allInFeeBounds: {
-    hookMinimumPct: "0.3 (platform) + 0 (treasury)",
-    hookDefaultPct: "0.3 (platform) + 0.7 (treasury) = 1.0",
-    hookMaximumPct: "0.3 (platform) + 3.0 (treasury) = 3.3",
+    hookMinimumPct: "0.3 (platform) + 1.0 (creator) + 0 (treasury) = 1.3",
+    hookDefaultPct: "0.3 (platform) + 1.0 (creator) + 0.7 (treasury) = 2.0",
+    hookMaximumPct: "0.3 (platform) + 1.0 (creator) + 3.0 (treasury) = 4.3",
     plusPoolLpFeePct: "0.3",
     plusProgrammableRouterFeePct: "0.3 when routed through Programmable (not waived for a custom hook)",
   },
