@@ -3,7 +3,9 @@
 param(
   [string]$Out = (Join-Path $PSScriptRoot "launch-banner.png"),
   [string]$Logo = (Join-Path $PSScriptRoot "..\contracts\assets\aura-logo.png"),
-  [string]$When = "OCT 17  ·  17:00 UTC"
+  [string]$When = "OCT 17  ·  17:00 UTC",
+  [switch]$Live,
+  [string]$CA = ""
 )
 Add-Type -AssemblyName System.Drawing
 $W = 1600; $H = 900
@@ -95,17 +97,25 @@ $g.DrawPath((New-Object System.Drawing.Pen (C 200 255 255 255), 1.5), $title)
 
 $fSub = New-Object System.Drawing.Font("Segoe UI Semibold", 34, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
 $x = 800
-$g.DrawString("L A U N C H I N G   O N   E T H E R E U M", $fSub, (New-Object System.Drawing.SolidBrush (C 255 225 228 255)), $x, 352)
+$subtitle = if ($Live) { "N O W   L I V E   O N   E T H E R E U M" } else { "L A U N C H I N G   O N   E T H E R E U M" }
+$g.DrawString($subtitle, $fSub, (New-Object System.Drawing.SolidBrush (C 255 225 228 255)), $x, 352)
 
 # ---- launch-time pill (glass + neon border)
-$pill = RoundRect $x 420 610 86 43
-$pillBrush = LG $x 0 ($x+610) 0 (C 210 98 80 235) (C 210 220 90 200)
+$pillW = if ($Live) { 720 } else { 610 }
+$pill = RoundRect $x 420 $pillW 86 43
+$pillBrush = LG $x 0 ($x+$pillW) 0 (C 210 98 80 235) (C 210 220 90 200)
 $g.FillPath($pillBrush, $pill)
 $g.DrawPath((New-Object System.Drawing.Pen (C 255 255 255 255), 2), $pill)
 $fTime = New-Object System.Drawing.Font("Segoe UI Black", 44, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
 $fLbl = New-Object System.Drawing.Font("Segoe UI Semibold", 18, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-$g.DrawString("CONTRACT LAUNCH", $fLbl, (New-Object System.Drawing.SolidBrush (C 230 255 255 255)), $x+36, 428)
-$g.DrawString($When, $fTime, [System.Drawing.Brushes]::White, $x+32, 446)
+if ($Live) {
+  $fCA = New-Object System.Drawing.Font("Consolas", 25, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+  $g.DrawString("CONTRACT ADDRESS (ETHEREUM)", $fLbl, (New-Object System.Drawing.SolidBrush (C 230 255 255 255)), $x+36, 430)
+  $g.DrawString($CA, $fCA, [System.Drawing.Brushes]::White, $x+34, 460)
+} else {
+  $g.DrawString("CONTRACT LAUNCH", $fLbl, (New-Object System.Drawing.SolidBrush (C 230 255 255 255)), $x+36, 428)
+  $g.DrawString($When, $fTime, [System.Drawing.Brushes]::White, $x+32, 446)
+}
 
 # ---- glass info cards
 $cards = @(
@@ -135,8 +145,10 @@ $g.FillRectangle($ribbon, 0, $H-64, $W, 64)
 $g.FillRectangle((IrisBrush 0 0 $W 0), 0, $H-64, $W, 2)
 $fFoot = New-Object System.Drawing.Font("Segoe UI Semibold", 22, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
 $fFootS = New-Object System.Drawing.Font("Segoe UI", 20, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-$g.DrawString("Launching with Programmable  ·  Uniswap v4", $fFoot, [System.Drawing.Brushes]::White, 48, $H-48)
-$g.DrawString("auracoin.cloud   ·   @auracoin404   ·   CA posted only at launch   ·   NFA", $fFootS, (New-Object System.Drawing.SolidBrush (C 255 200 205 255)), 760, $H-46)
+$footLeft = if ($Live) { "Launched with Programmable  ·  Uniswap v4" } else { "Launching with Programmable  ·  Uniswap v4" }
+$g.DrawString($footLeft, $fFoot, [System.Drawing.Brushes]::White, 48, $H-48)
+$footRight = if ($Live) { "auracoin.cloud   ·   @auracoin404   ·   Only official CA   ·   NFA" } else { "auracoin.cloud   ·   @auracoin404   ·   CA posted only at launch   ·   NFA" }
+$g.DrawString($footRight, $fFootS, (New-Object System.Drawing.SolidBrush (C 255 200 205 255)), 760, $H-46)
 
 $bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose(); $logoImg.Dispose()
