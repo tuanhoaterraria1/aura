@@ -6,7 +6,6 @@ Launch protection (enforced by contract):
 - Opening buy fee starts at 99% total and decays to the normal 1.3% over the first 30 seconds; the extra amount goes to the Programmable platform treasury. Sells pay normal fees throughout.
 - For the first 300 seconds, each wallet can receive at most 2% of supply and each buyer can buy at most 2% cumulatively, developer included. Buys in this window go through the canonical Uniswap Universal Router.
 - Opening valuation of at least $15,000 FDV, checked against the Chainlink ETH/USD feed.
-- Six additional wallets are exempt from the opening extra fee only; like the developer, they stay capped at 2% for the first 300 seconds.
 
 Supply: 1,000,000,000 AURA, all seeded into permanently locked liquidity; no later mint. The creator's initial buy is about 0.66% of supply.
 
