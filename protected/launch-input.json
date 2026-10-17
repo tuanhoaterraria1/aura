@@ -11,7 +11,7 @@
     "initialBuyWei":  "50000000000000000",
     "publicOrigin":  {
                          "url":  "https://github.com/tuanhoaterraria1/aura",
-                         "revision":  "0000000000000000000000000000000000000000"
+                         "revision":  "d3c2879f42d753e0a309a34a3a51adbc70c473cc"
                      },
     "token":  {
                   "name":  "Aura coin 404",
