@@ -94,6 +94,10 @@ const t0 = Number(await read(A.token.address, erc20, "startedAt"));
 const tax0 = await read(A.module.address, mod, "additionalTaxPpmForBuyer", [BUYER]);
 check("opening extra fee near 98.7% at start (99% total)", tax0 > 950_000, `${tax0} ppm extra`);
 check("developer pays no opening extra fee", (await read(A.module.address, mod, "additionalTaxPpmForBuyer", [DEV])) === 0);
+for (const exempt of input.additionalTaxExemptWallets) {
+  const extra = await read(A.module.address, mod, "additionalTaxPpmForBuyer", [exempt]);
+  check(`whitelisted ${exempt.slice(0, 8)}… pays no opening extra fee`, extra === 0 && (await read(A.module.address, mod, "isTaxExempt", [exempt])));
+}
 await advance(15);
 const tax15 = await read(A.module.address, mod, "additionalTaxPpmForBuyer", [BUYER]);
 check("opening extra fee decays (~half at 15s)", tax15 < tax0 && tax15 > 0, `${tax15} ppm extra`);
